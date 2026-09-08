@@ -343,6 +343,7 @@ async function openMenu() {
   app.audio.play('whoosh', { volume: .3 });
   await flyTo(SHOTS.menu, { duration: 1.45, arc: .18 });
   state.scene = 'menu';
+  app.adaptive.setCap(quality.menuCap); // the board is text: use the screen's full density here
   app.menuBoard.active = true;
   app.menuBoard.committing = false;
   app.menuBoard.setHover(-1);
@@ -377,6 +378,7 @@ async function chooseDish(i) {
 async function closeMenu() {
   if (state.scene !== 'menu') return;
   state.scene = 'toTable';
+  app.adaptive.setCap(quality.tableCap);  // back to the animated-scene budget for the flight and the table
   app.menuBoard.active = false;
   app.menuBoard.committing = false;
   app.menuBoard.setHover(-1);
@@ -689,7 +691,7 @@ const FRAMING = {
   tablePullBack: 2.5,   // camera moves back this far on a fully portrait table
   tableLift: 0.95,      // ...and up this far
   tableSlide: -0.3,     // ...and left this far
-  tableLookY: 0.42,     // look-at rises so the sign clears the corner controls and the basket, sticks and bowl all fit
+  tableLookY: 0.48,     // look-at rises so the sign clears the corner controls and the basket, sticks and bowl all fit
   tableLookZ: 0.3,      // look-at comes forward so the tabletop foreground is not half the frame
   introLookY: -0.55,    // the welcome shot looks lower on portrait screens (less empty wall)
   introFov: 14,         // extra vertical fov for the welcome shot on portrait screens

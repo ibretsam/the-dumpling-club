@@ -1,3 +1,16 @@
+# The Dumpling Club · sharpness follow-up · September 8, 2026
+
+Reported from a real iPhone after the mobile revision shipped: the menu looked soft, and the hint pill wrapped onto two lines with empty space either side.
+
+- **Blur.** The phone pixel-ratio cap of 1.5× on a 3× screen meant the whole canvas was upscaled 2×, and the 880 px board texture was itself slightly magnified. Now the menu scene uses the screen's full density (up to 3× on phones; `quality.menuCap`) because the board is mostly text and the scene is nearly static there, while the animated table and title stay at ≤ 2× (`quality.tableCap`, the pre-revision level). The adaptive governor steps down faster when a device is far behind, ignores isolated stalls such as shader compiles, remembers a ratio that proved too slow for 30 s, and can lower or raise its cap instantly when the scene changes. On ≥ 2.5× screens the board canvas is oversampled 1.5× (1320 × 1860) so the paper is never magnified; drawing and hit testing stay in the 880 × 1240 logical space.
+- **Hint width.** On phones the hint and the Another round button were centred with `left: 50%` plus a transform, which gives a fixed element only half the viewport to lay out in, so the text wrapped at half width. They are now centred with `left`/`right` and auto margins and use the full width.
+- **Icons.** The text arrows on Play and Another round are replaced by custom inline SVG icons in one stroke family: chopsticks pinching a bun (Play), a steaming basket (Another round) and a redrawn speaker (mute). They inherit the button colour, tilt or steam slightly on hover, and stay hidden from assistive technology behind the button labels.
+- The portrait table look-at rises a little more so the sign clears the corner controls.
+
+Verified on an emulated 3× iPhone (Playwright, 390 × 750, mobile user agent): menu at pixel ratio 3 with a 1320 × 1860 board canvas, table back at 2, the long "holding" hint on one 333 px line with equal margins, no page errors; plus the full suites (see the revision below for what they cover).
+
+---
+
 # The Dumpling Club · mobile and motion revision · September 8, 2026
 
 The scene stays the interface. This revision makes the site open quickly and run smoothly on phones, tightens the phone framing, and adds a few small interactions and camera touches. Interface text remains minimal (a tiny eyebrow line and a muted tagline on the welcome screen, a quiet hint); the character bubbles and tasting reactions are kept and slightly polished.

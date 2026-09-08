@@ -1,22 +1,26 @@
 import * as THREE from 'three';
 import { motion } from './motion.js';
+import { quality } from './quality.js';
 import { getType } from './dumpling-geometry.js';
 import { damp } from './tween.js';
 import { menuNames, menuHeading, t } from './i18n.js';
 
 // The menu is a texture on the actual wooden board. Selection uses the paper's UVs,
 // so camera movement, portrait screens and touch all hit exactly what is drawn.
+// All drawing and hit testing use the 880×1240 logical space; on dense phone screens the canvas
+// is oversampled (quality.menuTextureScale) so the paper is never magnified and the text stays sharp.
 const W = 880, H = 1240, TOP = 194, ROW = 122;
 const font = (lang, size, weight = 400, heading = false) => `${weight} ${size}px ${lang === 'zh' ? '"PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif' : heading ? 'Fraunces, Georgia, serif' : '"Be Vietnam Pro", sans-serif'}`;
 export class MenuBoard {
   constructor(board, items, geometries, audio) {
     Object.assign(this, { board, items, audio });
+    this.scale = quality.menuTextureScale || 1;
     this.canvas = document.createElement('canvas');
-    this.canvas.width = W; this.canvas.height = H;
+    this.canvas.width = Math.round(W * this.scale); this.canvas.height = Math.round(H * this.scale);
     this.ctx = this.canvas.getContext('2d');
     this.texture = new THREE.CanvasTexture(this.canvas);
     this.texture.colorSpace = THREE.SRGBColorSpace;
-    this.texture.anisotropy = 4;
+    this.texture.anisotropy = 8;
     board.paper.material.map = this.texture;
     board.paper.material.color.set(0xffffff);
     board.paper.material.needsUpdate = true;
@@ -83,6 +87,7 @@ export class MenuBoard {
   draw() {
     const c = this.ctx;
     const headlineSize = innerHeight < 520 && innerWidth > innerHeight ? 52 : 40;
+    c.setTransform(this.scale, 0, 0, this.scale, 0, 0);
     c.fillStyle = '#fff4de'; c.fillRect(0,0,W,H);
     c.strokeStyle = '#cba579'; c.lineWidth = 2; c.strokeRect(25,25,W-50,H-50);
     c.strokeStyle = '#ae492b'; c.lineWidth = 4; c.strokeRect(37,37,W-74,H-74);

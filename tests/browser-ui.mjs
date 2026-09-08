@@ -43,7 +43,7 @@ async function noChrome(page, expected = []) {
   const visible = await page.evaluate(()=>[...document.querySelectorAll('button,dialog,#hint,#brand,#table-toolbar')].filter(e=>{
     const r=e.getBoundingClientRect(),s=getComputedStyle(e);
     return r.width>2 && r.height>2 && s.visibility!=='hidden' && s.display!=='none' && !e.closest('.sr-only,[inert],#language-switch,#sound-toggle');
-  }).map(e=>e.textContent));
+  }).map(e=>e.textContent.trim()));
   assert.deepEqual(visible,expected,'only the expected scene controls are visible');
 }
 try {
@@ -100,7 +100,7 @@ try {
   // Empty the basket through the complete animation, then refill by tapping its actual mesh.
   for(let i=0;i<3;i++) {await click(page,'dumpling');await carrying(page);await page.mouse.click(80,900);await settled(page);}
   assert.equal(await page.evaluate(()=>dumplingClub.interaction.seated.length),0);
-  await page.waitForTimeout(1200);await noChrome(page,['Another round ↗']);await click(page,'steamer');await tableReady(page,3);
+  await page.waitForTimeout(1200);await noChrome(page,['Another round']);await click(page,'steamer');await tableReady(page,3);
   const a11y=await new AxeBuilder({page}).withTags(['wcag2a','wcag2aa','wcag21aa']).analyze();
   assert.deepEqual(a11y.violations.map(v=>v.id),[]);
   results.push('Desktop: physical menu hover/portion/order, chopstick pickup/rest, pick/dip/return/eat, reopen, keyboard, empty steamer refill, sound, axe');

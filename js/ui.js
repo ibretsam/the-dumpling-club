@@ -25,8 +25,8 @@ export class UI {
   localize() {
     const language = getLanguage();
     document.documentElement.lang = language === 'zh' ? 'zh-Hans' : language;
-    this.el['play-button'].firstChild.textContent = t('play') + ' ';
-    this.el['another-round'].firstChild.textContent = t('anotherRound') + ' ';
+    this.el['play-button'].firstChild.textContent = t('play');
+    this.el['another-round'].firstChild.textContent = t('anotherRound');
     this.el['scene-guide'].textContent = t('sceneGuide');
     this.el.scene.setAttribute('aria-label', t('sceneLabel'));
     this.el['loader-label'].textContent = t('loading');

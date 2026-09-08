@@ -29,12 +29,20 @@ body.is-cinematic::after { box-shadow: inset 0 0 220px #5a37123d; }
 #title-screen.is-hidden { opacity: 0; visibility: hidden; }
 .title-eyebrow { margin: 0 0 2px; color: #9a7f68; font: 500 11px/1.4 var(--ui-font); letter-spacing: .22em; text-transform: uppercase; text-align: center; text-shadow: 0 1px 8px #fff9ed; animation: rise-in .9s var(--ease-out) .1s both; }
 .title-tagline { margin: 0; max-width: min(420px, 82vw); padding: 0 12px; color: var(--ink-soft); font: 400 12px/1.5 var(--ui-font); letter-spacing: .02em; text-align: center; text-shadow: 0 1px 8px #fff9ed; opacity: .78; animation: rise-in .9s var(--ease-out) .4s both; }
-#play-button { pointer-events: auto; display: flex; align-items: center; gap: 36px; border: 1px solid #a95835; border-radius: 50px; background: var(--accent); color: #fff8eb; padding: 17px 30px; box-shadow: 0 8px 30px #82442533; font: 600 22px var(--display-font); cursor: pointer; transition: transform .25s var(--ease-out), background .25s, box-shadow .25s; animation: rise-in .8s var(--ease-out) .2s both; }
-#play-button span { font: 400 23px var(--ui-font); transition: transform .3s var(--ease-out); }
+#play-button { pointer-events: auto; display: flex; align-items: center; gap: 22px; border: 1px solid #a95835; border-radius: 50px; background: var(--accent); color: #fff8eb; padding: 16px 26px 16px 30px; box-shadow: 0 8px 30px #82442533; font: 600 22px var(--display-font); cursor: pointer; transition: transform .25s var(--ease-out), background .25s, box-shadow .25s; animation: rise-in .8s var(--ease-out) .2s both; }
 #play-button:hover { transform: translateY(-3px); background: var(--accent-deep); box-shadow: 0 12px 34px #82442540; }
-#play-button:hover span { transform: translate(2px, -2px); }
 #play-button:active { transform: translateY(0) scale(.98); }
 #play-button:focus-visible { outline: 3px solid #572e1c; outline-offset: 5px; }
+/* Icons: one stroke family (round caps, currentColor). The chopsticks tilt as if lifted on hover;
+   the basket's steam drifts up on hover. */
+.icon { flex: none; display: block; }
+.icon-chopsticks { transition: transform .35s var(--ease-pop); }
+.icon-chopsticks .bun { stroke-width: 1.7; }
+#play-button:hover .icon-chopsticks { transform: translate(1px, -2px) rotate(-6deg); }
+.icon-basket .weave { opacity: .6; }
+.icon-basket .steam { opacity: .8; transition: transform .45s var(--ease-out), opacity .45s; }
+.icon-basket .steam-2 { transition-delay: .06s; }
+#another-round:hover .icon-basket .steam { transform: translateY(-1.5px); opacity: 1; }
 @keyframes rise-in { from { opacity: 0; translate: 0 10px; } to { opacity: 1; translate: 0 0; } }
 
 /* Loader: a breathing dumpling and a thin bar while the first dish downloads. */
@@ -69,7 +77,7 @@ body.is-cinematic::after { box-shadow: inset 0 0 220px #5a37123d; }
 #scene-hint { position: fixed; z-index: 1; left: max(22px, env(safe-area-inset-left)); bottom: max(18px, env(safe-area-inset-bottom)); max-width: min(360px, calc(100vw - 44px)); margin: 0; padding: 6px 12px; border-radius: 999px; background: #fff8ec99; color: #7d6858; font: 400 12px/1.55 var(--ui-font); letter-spacing: .01em; pointer-events: none; animation: rise-in .5s var(--ease-out); }
 #scene-hint.is-refreshed { animation: rise-in .4s var(--ease-out); }
 #next-round { position: fixed; z-index: 2; left: max(22px, env(safe-area-inset-left)); bottom: max(18px, env(safe-area-inset-bottom)); animation: rise-in .6s var(--ease-pop); }
-#another-round { display: flex; align-items: center; gap: 22px; min-height: 44px; padding: 10px 17px; border: 1px solid #d7bda4; border-radius: 24px; background: #fff8e9e8; color: #873c28; font: 500 13px/1.4 var(--ui-font); cursor: pointer; box-shadow: 0 4px 16px #69412812; transition: background .2s, transform .25s var(--ease-out), box-shadow .25s; }
+#another-round { display: flex; align-items: center; gap: 12px; min-height: 44px; padding: 10px 15px 10px 18px; border: 1px solid #d7bda4; border-radius: 24px; background: #fff8e9e8; color: #873c28; font: 500 13px/1.4 var(--ui-font); cursor: pointer; box-shadow: 0 4px 16px #69412812; transition: background .2s, transform .25s var(--ease-out), box-shadow .25s; }
 #another-round:hover { background: #fffaf1; transform: translateY(-2px); box-shadow: 0 8px 22px #6941281c; }
 #another-round:active { transform: translateY(0) scale(.98); }
 #another-round:focus-visible { outline: 2px solid #9c442c; outline-offset: 4px; }
@@ -96,10 +104,12 @@ body.is-cinematic #sound-toggle, body.is-cinematic #language-switch { opacity: .
    on the menu the hint moves above the board, clear of the dark sauce bowl. */
 @media (max-width: 600px) {
   #reaction { top: 22%; }
-  #scene-hint { left: 50%; transform: translateX(-50%); bottom: max(8vh, env(safe-area-inset-bottom)); max-width: calc(100vw - 32px); text-align: center; }
+  /* Centred with left/right + auto margins (not left:50% + transform, which would give the text
+     only half the viewport to lay out in and wrap it needlessly). */
+  #scene-hint { left: 16px; right: 16px; width: fit-content; max-width: calc(100vw - 32px); margin-inline: auto; bottom: max(8vh, env(safe-area-inset-bottom)); text-align: center; }
   #scene-hint[data-scene="menu"] { top: max(76px, calc(env(safe-area-inset-top) + 64px)); bottom: auto; }
-  #next-round { left: 50%; transform: translateX(-50%); bottom: max(8vh, env(safe-area-inset-bottom)); }
-  #play-button { gap: 26px; padding: 15px 26px; font-size: 20px; }
+  #next-round { left: 16px; right: 16px; width: fit-content; margin-inline: auto; bottom: max(8vh, env(safe-area-inset-bottom)); }
+  #play-button { gap: 18px; padding: 15px 22px 15px 26px; font-size: 20px; }
 }
 @media (max-height: 520px) and (orientation: landscape) {
   #title-screen { padding-bottom: max(14px, env(safe-area-inset-bottom)); gap: 8px; }
