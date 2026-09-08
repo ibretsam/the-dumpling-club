@@ -4,9 +4,55 @@
 // a chopstick cup, and a standing menu board the camera flies to when the player orders.
 // Everything is procedural (canvas textures, lathe/box geometry). Units: 1 = 10 cm, y up.
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { COLORS } from './config.js';
 import { bambooTexture, wovenTexture, noiseCanvas } from './textures.js';
 import { motion } from './motion.js';
+
+/**
+ * Collapse the static clutter (jars, bowls, cups, scallops, chopsticks in the cup, …) into one mesh
+ * per material. The stall is ~120 small meshes; on a phone every draw call costs more than the
+ * triangles it draws, so this turns most of them into a dozen. Meshes under an excluded object
+ * (the swinging lanterns, the interactive menu board), meshes with material arrays and geometries
+ * without the standard position/normal/uv set are left alone. Returns the number of draw calls saved.
+ */
+export function mergeStaticMeshes(root, exclude = []) {
+  root.updateMatrixWorld(true);
+  const rootInverse = new THREE.Matrix4().copy(root.matrixWorld).invert();
+  const local = new THREE.Matrix4();
+  const buckets = new Map();
+  root.traverse((o) => {
+    if (!o.isMesh || Array.isArray(o.material)) return;
+    for (let p = o; p; p = p.parent) if (exclude.includes(p)) return;
+    const g = o.geometry;
+    if (!g.attributes.position || !g.attributes.normal || !g.attributes.uv) return;
+    const key = o.material.uuid + (g.index ? ':indexed' : ':flat');
+    let b = buckets.get(key);
+    if (!b) { b = { material: o.material, geometries: [], meshes: [], castShadow: false, receiveShadow: false }; buckets.set(key, b); }
+    const baked = g.clone();
+    for (const name of Object.keys(baked.attributes)) if (!['position', 'normal', 'uv'].includes(name)) baked.deleteAttribute(name);
+    baked.applyMatrix4(local.multiplyMatrices(rootInverse, o.matrixWorld));
+    b.geometries.push(baked);
+    b.meshes.push(o);
+    b.castShadow = b.castShadow || o.castShadow;
+    b.receiveShadow = b.receiveShadow || o.receiveShadow;
+  });
+  let saved = 0;
+  for (const b of buckets.values()) {
+    if (b.meshes.length < 2) continue;
+    const geometry = mergeGeometries(b.geometries, false);
+    for (const g of b.geometries) g.dispose();
+    if (!geometry) continue;
+    for (const m of b.meshes) m.removeFromParent();
+    const mesh = new THREE.Mesh(geometry, b.material);
+    mesh.name = 'Merged:' + (b.meshes[0].name || b.material.name || 'static');
+    mesh.castShadow = b.castShadow;
+    mesh.receiveShadow = b.receiveShadow;
+    root.add(mesh);
+    saved += b.meshes.length - 1;
+  }
+  return saved;
+}
 
 const cache = new Map();
 function canvasTexture(key, w, h, paint, { repeat = null, wrap = THREE.RepeatWrapping, colorSpace = THREE.SRGBColorSpace } = {}) {
@@ -208,8 +254,12 @@ export function buildStall() {
   group.add(awning);
   const valance = new THREE.Group();
   const scallopGeo = new THREE.CircleGeometry(0.26, 16, Math.PI, Math.PI);
+  const scallopMats = [
+    new THREE.MeshStandardMaterial({ color: new THREE.Color(COLORS.terracotta), roughness: 0.95, side: THREE.DoubleSide }),
+    new THREE.MeshStandardMaterial({ color: new THREE.Color('#F4E7D3'), roughness: 0.95, side: THREE.DoubleSide }),
+  ];
   for (let i = 0; i < 20; i++) {
-    const sc = new THREE.Mesh(scallopGeo, i % 2 === 0 ? new THREE.MeshStandardMaterial({ color: new THREE.Color(COLORS.terracotta), roughness: 0.95, side: THREE.DoubleSide }) : new THREE.MeshStandardMaterial({ color: new THREE.Color('#F4E7D3'), roughness: 0.95, side: THREE.DoubleSide }));
+    const sc = new THREE.Mesh(scallopGeo, scallopMats[i % 2]);
     sc.position.set(-4.3 + i * 0.5, 3.46, -2.2);
     valance.add(sc);
   }
@@ -343,6 +393,7 @@ export function buildStall() {
 
   // ---- Menu board (A-frame) on the counter's back-right corner.
   // An A-frame: both panels hinge at the top and spread at the bottom.
+  const lanterns = animated.map((a) => a.obj);
   const board = new THREE.Group();
   const tilt = 0.17;
   const panelW = 1.05, panelH = 1.4;
@@ -373,6 +424,9 @@ export function buildStall() {
   const menuCentre = paper.getWorldPosition(new THREE.Vector3());
   const menuNormal = paper.getWorldDirection(new THREE.Vector3()).normalize();
 
+  // Everything that never moves and is never hit-tested becomes a handful of merged meshes.
+  const drawCallsSaved = mergeStaticMeshes(group, [...lanterns, board]);
+
   function update(dt, time) {
     if (motion.reduced) return;
     for (const a of animated) {
@@ -381,5 +435,5 @@ export function buildStall() {
     }
   }
 
-  return { group, update, steamOrigin, menuBoard: { group: board, paper, centre: menuCentre, normal: menuNormal, width: panelW, height: panelH } };
+  return { group, update, steamOrigin, drawCallsSaved, menuBoard: { group: board, paper, centre: menuCentre, normal: menuNormal, width: panelW, height: panelH } };
 }

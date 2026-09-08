@@ -1,12 +1,13 @@
 // Renderer, camera, lights and a small procedural studio environment map.
 import * as THREE from 'three';
 import { COLORS, LAYOUT } from './config.js';
+import { quality } from './quality.js';
 
 export const isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && window.innerWidth < 900);
 
 export function createRenderer(canvas) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false, powerPreference: 'high-performance', preserveDrawingBuffer: false });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, isMobile ? 2 : 2));
+  renderer.setPixelRatio(quality.pixelRatio); // main.js keeps this in step with AdaptiveResolution
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 0.94;

@@ -5,11 +5,13 @@ import * as THREE from 'three';
 import { CHOPSTICKS, BOWL, COLORS } from './config.js';
 import { tween, wait, Ease, cancelAllTweens, clamp } from './tween.js';
 import { motion } from './motion.js';
+import { haptic } from './quality.js';
 import { DIRS } from './chopstick-controller.js';
 import { voice } from './i18n.js';
 import { vesselClearance, sauceContactLevel } from './contact.js';
 
 const UP = new THREE.Vector3(0, 1, 0);
+const IDLE_CUE_AFTER = 2.5;   // seconds of doing nothing before the chopsticks start to glow softly
 
 export class Interaction {
   constructor(opts) {
@@ -21,6 +23,9 @@ export class Interaction {
     this.dipped = false;
     this.runId = 0;
     this.shake = 0;
+    this.punch = 0;                   // camera push-in on a chomp (decays each frame)
+    this.idleTime = 0;                // seconds since the player last did something at an idle table
+    this._pokeAt = new WeakMap();     // dumpling -> time of its last poke (rate limit)
     this.isTouch = false;
     this.autopilot = false;           // true while autoplay / recording drive the sequences
     this.pointer = { ndc: new THREE.Vector2(0, 0), has: false, world: new THREE.Vector3(), overBowl: false, biteZone: false, onPlane: false };
@@ -89,9 +94,14 @@ export class Interaction {
     if (this.busy || this.autopilot) return false;
     const ray = this.raycaster;
     ray.setFromCamera(ndc, this.camera);
+    this.idleTime = 0;
+    // On a phone there is no hover: a tap is the moment the food notices you.
+    if (isTouch && ['idle', 'holding'].includes(this.phase)) { this.updatePointerWorld(); this.crowd.glance(this.pointer.world, 1.4); }
 
     if (this.phase === 'idle') {
       if (this.hitsChopsticks(ray)) { this.liftChopsticks(); return true; }
+      const poked = this.hitDumpling(ray);
+      if (poked) { this.poke(poked); return true; }
       if (!this.getDumplings().some(d => d.state !== 'eaten') && this.hitsVessel(ray)) { this.onRefill?.(); return true; }
       return false;
     }
@@ -177,8 +187,9 @@ export class Interaction {
   hitDumpling(ray) {
     this._hits.length = 0;
     const meshes = [];
-    for (const d of this.seated) meshes.push(d.mesh);
-    ray.intersectObjects(meshes, true, this._hits);
+    // The low-poly hit proxy stands in for the 60k-triangle body (see Dumpling).
+    for (const d of this.seated) meshes.push(d.hitProxy || d.mesh);
+    ray.intersectObjects(meshes, false, this._hits);
     for (const h of this._hits) {
       let o = h.object;
       while (o && !o.userData.dumpling) o = o.parent;
@@ -251,6 +262,21 @@ export class Interaction {
     }
   }
 
+  /** A bare-finger poke before the chopsticks are up: the character reacts, nothing is picked. */
+  poke(d) {
+    const now = performance.now();
+    if (now - (this._pokeAt.get(d) || 0) < 350) return false;
+    this._pokeAt.set(d, now);
+    d.reactTo('hover', { hold: 1.4 });
+    d.blink();
+    if (motion.reduced) d.wiggle(0.5);
+    else d.hop(0.55 + 0.45 * d.character.energy);
+    this.crowd.react('poke', d);
+    this.audio?.play('boing', { volume: 0.3, pitch: 1.15 + Math.random() * 0.25 });
+    haptic(6);
+    return true;
+  }
+
   // ---------- sequences ----------
 
   async liftChopsticks() {
@@ -316,6 +342,7 @@ export class Interaction {
     if (!(await this.chop.openTo(0, { duration: 0.2, ease: Ease.outCubic })) || !alive()) return false;
     this.chop.contactClosing = false;
     this.audio?.play('pick');
+    haptic(10);
 
     // Attach the dumpling to the carry pivot at the grip point.
     this.carry.position.copy(this.chop.gripWorldPosition(this._v));
@@ -412,6 +439,8 @@ export class Interaction {
     // Chomp one.
     const bitePoint = d.group.localToWorld(new THREE.Vector3().fromArray(d.type ? d.type.bite.point : [0.14, 0.3, 0.14]));
     this.shake = motion.reduced ? 0 : 0.6;
+    this.punch = motion.reduced ? 0 : 1;
+    haptic([12, 40, 10]);
     d.setBitten(true);
     d.reactTo('bitten');
     this.audio?.play('nom');
@@ -426,6 +455,8 @@ export class Interaction {
 
     // Chomp two: gone.
     this.shake = motion.reduced ? 0 : 0.45;
+    this.punch = motion.reduced ? 0 : 0.8;
+    haptic([10, 30, 16]);
     this.audio?.play('nom', { pitch: 1.12, volume: 0.9 });
     this.crumbs?.burst(d.group.localToWorld(new THREE.Vector3(0, (d.type ? d.type.metrics.bodyHeight : 0.36) * 0.6, (d.type ? d.type.metrics.depth : 0.5) * 0.2)), 10, { dir: fwd.clone().negate().add(new THREE.Vector3(0, -0.3, 0)).normalize(), spread: 0.9 });
     this.release(d);
@@ -513,6 +544,8 @@ export class Interaction {
     this.haloOpacity = 0; this.halo.material.opacity = 0; this.returnHalo.material.opacity = 0;
     this.chop.setContact(null);
     this.restMaterial.emissiveIntensity = 0; this.stickMaterial.emissiveIntensity = 0;
+    this.punch = 0; this.idleTime = 0;
+    this.crowd.setGaze(null);
     this.chop.restBlend = 1;
     this.chop.openTarget = 0.12; this.chop.open = 0.12;
     this.chop.apply();
@@ -579,17 +612,30 @@ export class Interaction {
     } else if (phase === 'idle') {
       if (!this.autopilot && !this.isTouch && this.pointer.has) {
         this.raycaster.setFromCamera(this.pointer.ndc, this.camera);
-        this.setCandidate(this.hitDumpling(this.raycaster));
-        this.ui.setCursor(this.hitsChopsticks(this.raycaster) ? 'grab' : !this.seated.length && this.hitsVessel(this.raycaster) ? 'pointer' : 'default');
+        this.updatePointerWorld();
+        const over = this.hitDumpling(this.raycaster);
+        this.setCandidate(over);
+        this.ui.setCursor(this.hitsChopsticks(this.raycaster) || over ? 'grab' : !this.seated.length && this.hitsVessel(this.raycaster) ? 'pointer' : 'default');
       }
     }
+
+    // Seated food follows the pointer with its eyes whenever nothing more interesting is happening.
+    if (!this.autopilot && (phase === 'idle' || phase === 'holding')) {
+      this.crowd.setGaze(this.pointer.has && !this.isTouch && this.pointer.onPlane !== false ? this.pointer.world : null);
+    }
+
+    // The idle cue: after a few quiet seconds the resting chopsticks glow softly, so a first-time
+    // player (especially on a phone, where nothing hovers) knows where the visit starts.
+    if (phase === 'idle' && !this.autopilot && this.seated.length) this.idleTime += dt; else this.idleTime = 0;
+    const cueRamp = clamp((this.idleTime - IDLE_CUE_AFTER) / 1.5, 0, 1);
+    const cue = cueRamp * (motion.reduced ? 0.1 : 0.14 * (0.5 + 0.5 * Math.sin(this.idleTime * 3.4)));
 
     this.raycaster.setFromCamera(this.pointer.ndc, this.camera);
     const overRest = this.pointer.has && ['holding','carrying'].includes(phase) && this.hitsRest(this.raycaster);
     const overSticks = this.pointer.has && phase === 'idle' && this.hitsChopsticks(this.raycaster);
     const blend = 1 - Math.exp(-10 * dt);
     this.restMaterial.emissiveIntensity += ((overRest ? .22 : 0) - this.restMaterial.emissiveIntensity) * blend;
-    this.stickMaterial.emissiveIntensity += ((overSticks ? .18 : 0) - this.stickMaterial.emissiveIntensity) * blend;
+    this.stickMaterial.emissiveIntensity += ((overSticks ? .18 : cue) - this.stickMaterial.emissiveIntensity) * blend;
     if (overRest) this.ui.setCursor('pointer');
 
     const empty = !this.getDumplings().some(d => d.state !== 'eaten');
@@ -607,8 +653,9 @@ export class Interaction {
       this.halo.scale.setScalar(((this.candidate.type ? this.candidate.type.metrics.radius : 0.27) / 0.27) * this.candidate.fitScale);
     }
 
-    // Camera shake decays.
+    // Camera shake and the bite push-in decay.
     if (this.shake > 0) this.shake = Math.max(0, this.shake - dt * 3.2);
+    if (this.punch > 0) this.punch = Math.max(0, this.punch - dt * 4.5);
   }
 
   syncCarry(dt) {

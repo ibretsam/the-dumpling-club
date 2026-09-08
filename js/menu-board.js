@@ -23,24 +23,36 @@ export class MenuBoard {
     this.ray = new THREE.Raycaster();
     this.hover = -1; this.selected = -1; this.portion = 5;
     this.active = false; this.committing = false;
-    this.minis = [];
-    items.forEach((item, i) => {
-      const types = item.id === 'assorted' ? [items[0].id, items[4].id, items[3].id] : [item.id];
-      // The same food geometry as the basket, mounted like little ceramic menu samples.
+    // One sample group per row exists from the start (hover/lift logic indexes them); the food
+    // meshes are mounted as soon as each dish's geometry has arrived, so the board never waits
+    // for dishes the player has not looked at yet.
+    this.minis = items.map((item, i) => {
       const group = new THREE.Group();
       group.position.set(-board.width * .34, this.localY(TOP + i * ROW + 88), .024);
-      types.forEach((id, j) => {
-        const geo = geometries.get(id).body;
-        geo.computeBoundingBox();
-        const size = geo.boundingBox.getSize(new THREE.Vector3());
-        const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: getType(id).skin.color, vertexColors: !!geo.attributes.color, roughness: .65 }));
-        mesh.scale.setScalar((types.length > 1 ? .086 : .17) / Math.max(size.x, size.y));
-        mesh.position.x = (j - (types.length - 1) / 2) * .064;
-        mesh.rotation.x = .18;
-        group.add(mesh);
-      });
       board.paper.add(group);
-      this.minis.push(group);
+      return group;
+    });
+    items.forEach((item, i) => {
+      const types = item.id === 'assorted' ? [items[0].id, items[4].id, items[3].id] : [item.id];
+      const mount = () => {
+        const group = this.minis[i];
+        if (group.children.length) return;
+        // The same food geometry as the basket, mounted like little ceramic menu samples.
+        types.forEach((id, j) => {
+          const geo = geometries.get(id).body;
+          geo.computeBoundingBox();
+          const size = geo.boundingBox.getSize(new THREE.Vector3());
+          const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: getType(id).skin.color, vertexColors: !!geo.attributes.color, roughness: .65 }));
+          mesh.scale.setScalar((types.length > 1 ? .086 : .17) / Math.max(size.x, size.y));
+          mesh.position.x = (j - (types.length - 1) / 2) * .064;
+          mesh.rotation.x = .18;
+          group.add(mesh);
+        });
+        // A sample that arrives while the board is already in view pops in rather than appearing.
+        if (this.active && !motion.reduced) group.scale.setScalar(.001);
+      };
+      if (typeof geometries.ready === 'function') geometries.ready(types).then(mount);
+      else mount();
     });
     this.draw();
   }

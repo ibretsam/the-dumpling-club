@@ -7,6 +7,7 @@ const errors=[];
 page.on('pageerror',e=>errors.push(e.message));
 await page.addInitScript(() => localStorage.setItem('dumpling-club.language','en'));
     await page.goto(process.env.TEST_URL || 'http://127.0.0.1:8080'); await page.waitForFunction(()=>window.dumplingClub?.step);
+await page.waitForFunction(()=>dumplingClub.geometries.loaded); // every dish file, not just the welcome one
 await page.getByRole('button',{name:'Play'}).click();
 await page.waitForFunction(()=>dumplingClub.state.scene==='menu');
 await page.keyboard.press('Enter');

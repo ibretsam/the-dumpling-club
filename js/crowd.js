@@ -10,11 +10,27 @@ export class Crowd {
     this.ui = ui;
     this.camera = camera;
     this.getDumplings = getDumplings;
-    this.watchTarget = null;         // THREE.Vector3 or null
+    this.watchTarget = null;         // THREE.Vector3 or null: everyone watches this (a pick, a dip, a bite)
     this.actor = null;
+    this.gaze = null;                // THREE.Vector3 or null: idle eyes follow this (the pointer, a tap)
+    this._gazeStore = new THREE.Vector3();
+    this._glanceUntil = 0;           // performance.now() deadline of a tap-triggered glance
     this._v = new THREE.Vector3();
     this._timers = new Set();
     this.hoverTimes = new WeakMap();
+  }
+
+  /** Idle gaze target (world). null relaxes — unless a timed glance is still running. */
+  setGaze(point) {
+    if (point) { this._gazeStore.copy(point); this.gaze = this._gazeStore; this._glanceUntil = 0; }
+    else if (this._glanceUntil <= performance.now()) { this.gaze = null; this._glanceUntil = 0; }
+  }
+
+  /** Everyone glances at a point for a moment (touch has no hover, so a tap is the cue). */
+  glance(point, seconds = 1.4) {
+    this._gazeStore.copy(point);
+    this.gaze = this._gazeStore;
+    this._glanceUntil = performance.now() + seconds * 1000;
   }
 
   bubbleFrom(dumpling, text, life = 2) {
@@ -61,6 +77,13 @@ export class Crowd {
         break;
       case 'picking':
         if (actor) this.bubbleFrom(actor, voice('picking', actor.personality.id));
+        break;
+      case 'poke':
+        if (!actor) break;
+        this.bubbleFrom(actor, voice('poke', actor.personality.id), 1.7);
+        // The neighbours look over; the liveliest one giggles.
+        this.glance(actor.worldPosition(this._v).setY(actor.type.metrics.height * 0.5), 1.3);
+        others.filter(d => d.character.energy > .7).slice(0, 2).forEach(d => this._later(0.15 + stagger(), () => { if (d.state === 'seated') d.reactTo('watch', {hold: 1.2}); }));
         break;
       case 'picked':
         if (actor) this.bubbleFrom(actor, voice('lifted', actor.personality.id), 2.4);
@@ -109,7 +132,8 @@ export class Crowd {
   }
 
   update(dt) {
-    const target = this.watchTarget;
+    if (this._glanceUntil && this._glanceUntil <= performance.now()) { this._glanceUntil = 0; this.gaze = null; }
+    const target = this.watchTarget || this.gaze;
     for (const d of this.getDumplings()) {
       if (d.state !== 'seated') continue;
       d.lookAt(target && d !== this.actor ? target : null);

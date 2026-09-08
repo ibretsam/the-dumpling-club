@@ -42,7 +42,7 @@ async function settled(page) {await page.waitForFunction(()=>!dumplingClub.inter
 async function noChrome(page, expected = []) {
   const visible = await page.evaluate(()=>[...document.querySelectorAll('button,dialog,#hint,#brand,#table-toolbar')].filter(e=>{
     const r=e.getBoundingClientRect(),s=getComputedStyle(e);
-    return r.width>2 && r.height>2 && s.visibility!=='hidden' && s.display!=='none' && !e.closest('.sr-only,[inert],#language-switch');
+    return r.width>2 && r.height>2 && s.visibility!=='hidden' && s.display!=='none' && !e.closest('.sr-only,[inert],#language-switch,#sound-toggle');
   }).map(e=>e.textContent));
   assert.deepEqual(visible,expected,'only the expected scene controls are visible');
 }

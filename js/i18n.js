@@ -26,8 +26,11 @@ export const menuNames = id => [language, ...LANGUAGES.filter(l => l !== languag
 
 export const COPY = {
   play: { vi: 'Bắt đầu', en: 'Play', zh: '开始' },
+  eyebrow: { vi: 'Điểm tâm · Dim sum · 点心', en: 'Dim sum · Điểm tâm · 点心', zh: '点心 · Dim sum · Điểm tâm' },
+  tagline: { vi: 'Cầm đũa, chọn bánh, chấm nước tương và thưởng thức.', en: 'Pick up the chopsticks, choose a dumpling, dip it and enjoy.', zh: '拿起筷子，选一个点心，蘸上酱油，慢慢享用。' },
   anotherRound: { vi: 'Thêm một xửng', en: 'Another round', zh: '再来一笼' },
   language: { vi: 'Ngôn ngữ', en: 'Language', zh: '语言' },
+  sound: { vi: 'Âm thanh', en: 'Sound', zh: '声音' },
   menu: { vi: 'Điểm tâm', en: 'Dim sum', zh: '点心' },
   pieces: { vi: 'SỐ CÁI', en: 'PIECES', zh: '数量' },
   portion: { vi: '{n} cái', en: '{n} pieces', zh: '{n}个' },
@@ -73,6 +76,7 @@ export const menuHeading = () => [language, ...LANGUAGES.filter(l=>l!==language)
 
 export const VOICES = {
   hover: { vi: ['Tớ á?', 'Chào bạn nha!', 'Chọn tớ nè!', 'Cẩn thận, tớ còn nóng!', 'Đến lượt tớ chưa?'], en: ['Me? Oh!', 'Hello there.', 'Pick me!', 'Careful, I’m warm.', 'Is it my turn?'], zh: ['是我吗？', '你好呀！', '选我吧！', '小心，我还烫呢！', '轮到我了吗？'] },
+  poke: { vi: ['Hihi, nhột quá!', 'Ấy da!', 'Đừng chọc tớ nữa!', 'Lấy đũa đi chứ!'], en: ['Hehe, that tickles!', 'Oof!', 'No poking!', 'Use the chopsticks!'], zh: ['嘻嘻，好痒！', '哎呀！', '别戳我啦！', '用筷子呀！'] },
   picking: { vi: ['Tớ thật á?!'], en: ['Me?!'], zh: ['真的是我？！'] },
   lifted: { vi: ['Ối!', 'Bám chắc nha!', 'Bay lên nào!', 'Nhẹ tay thôi nhé!'], en: ['Eep!', 'Hold on tight!', 'Whoa, up I go.', 'Be gentle!'], zh: ['呀！', '抓稳啦！', '我飞起来啦！', '轻一点哦！'] },
   picked: { vi: ['Dũng cảm lên!', 'Chúc may mắn nha!', 'Đừng chọn tớ tiếp nhé…'], en: ['Be brave!', 'Good luck, friend.', 'Not me next…'], zh: ['勇敢一点！', '祝你好运！', '下一个别选我呀…'] },
