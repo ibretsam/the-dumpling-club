@@ -4,6 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#F5EBDD">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <title>The Dumpling Club</title>
   <meta name="description" content="Một quầy điểm tâm nhỏ xinh. Cầm đũa, chọn bánh, chấm nước tương và thưởng thức.">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='36' r='24' fill='%23F7E8D0'/%3E%3Ccircle cx='24' cy='34' r='3' fill='%233A2A22'/%3E%3Ccircle cx='40' cy='34' r='3' fill='%233A2A22'/%3E%3Cpath d='M27 42q5 4 10 0' stroke='%233A2A22' stroke-width='2' fill='none' stroke-linecap='round'/%3E%3Ccircle cx='18' cy='40' r='3' fill='%23F09A97' opacity='.8'/%3E%3Ccircle cx='46' cy='40' r='3' fill='%23F09A97' opacity='.8'/%3E%3C/svg%3E">
@@ -13,19 +15,51 @@
   <script type="importmap">
     { "imports": { "three": "./lib/three.module.js", "three/addons/": "./lib/addons/" } }
   </script>
+  <!-- Start the big downloads while the module graph is still being discovered. -->
+  <link rel="modulepreload" href="lib/three.module.js">
+  <link rel="modulepreload" href="lib/three.core.js">
+  <link rel="modulepreload" href="lib/addons/loaders/GLTFLoader.js">
+  <link rel="modulepreload" href="js/main.js">
+  <link rel="preload" href="assets/dumplings/xiaolongbao.glb" as="fetch" crossorigin>
 </head>
 <body>
   <main aria-label="The Dumpling Club">
     <h1 class="sr-only">The Dumpling Club</h1>
     <canvas id="scene" tabindex="0" role="application" aria-label="Quầy điểm tâm tương tác" aria-describedby="scene-guide"></canvas>
     <p id="scene-guide" class="sr-only">Bắt đầu sẽ mở thực đơn gỗ. Dùng phím mũi tên chọn món, 3, 5 hoặc 8 chọn số lượng, Enter để gọi món. Tại bàn, chạm đũa trước rồi chọn bánh. Chạm nước tương để chấm, xửng để trả bánh, gác đũa để đặt đũa xuống, hoặc chỗ khác để ăn. Phím tắt: Enter cầm đũa và chọn bánh; D chấm; B ăn; Escape trả bánh hoặc đặt đũa xuống; O mở thực đơn; R gọi lại món; M bật tắt âm thanh. V quay một lượt ăn, Escape dừng quay.</p>
-    <div id="loader" role="status"><span class="loader-dumpling" aria-hidden="true">◡</span><span class="sr-only">Đang làm nóng xửng…</span></div>
+    <div id="loader" role="status" aria-live="polite">
+      <div class="loader-card">
+        <span class="loader-dumpling" aria-hidden="true">
+          <svg viewBox="0 0 80 64" width="80" height="64" focusable="false">
+            <path d="M8 44c0-18 12-32 32-32s32 14 32 32c0 8-6 12-12 12H20c-6 0-12-4-12-12z" fill="#F7E8D0" stroke="#C9A27A" stroke-width="2"/>
+            <path d="M28 12c4-5 8-6 12-6s8 1 12 6" fill="none" stroke="#C9A27A" stroke-width="2" stroke-linecap="round"/>
+            <circle cx="30" cy="36" r="3" fill="#3A2A22"/><circle cx="50" cy="36" r="3" fill="#3A2A22"/>
+            <path d="M34 44q6 5 12 0" fill="none" stroke="#3A2A22" stroke-width="2" stroke-linecap="round"/>
+            <circle cx="21" cy="42" r="3.5" fill="#F09A97" opacity=".75"/><circle cx="59" cy="42" r="3.5" fill="#F09A97" opacity=".75"/>
+          </svg>
+        </span>
+        <p class="loader-text"><span id="loader-label">Đang làm nóng xửng…</span><span id="loader-percent" aria-hidden="true"></span></p>
+        <div class="loader-bar" aria-hidden="true"><span id="loader-fill"></span></div>
+      </div>
+    </div>
+    <button id="sound-toggle" type="button" aria-pressed="true" aria-label="Âm thanh">
+      <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false">
+        <path class="speaker" d="M4 9v6h4l5 4V5L8 9H4z" fill="currentColor"/>
+        <path class="wave wave-1" d="M15.5 8.5a5 5 0 0 1 0 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path class="wave wave-2" d="M18.5 6a9 9 0 0 1 0 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path class="mute" d="M16 9.5l5 5m0-5l-5 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+    </button>
     <div id="language-switch" role="group" aria-label="Ngôn ngữ">
       <button type="button" data-language="vi" lang="vi" aria-label="Tiếng Việt" aria-pressed="true">VI</button>
       <button type="button" data-language="en" lang="en" aria-label="English" aria-pressed="false">EN</button>
       <button type="button" data-language="zh" lang="zh-Hans" aria-label="中文" aria-pressed="false">中文</button>
     </div>
-    <div id="title-screen"><button id="play-button" type="button">Bắt đầu <span aria-hidden="true">↗</span></button></div>
+    <div id="title-screen">
+      <p class="title-eyebrow" id="title-eyebrow" aria-hidden="true">Điểm tâm · Dim sum · 点心</p>
+      <button id="play-button" type="button">Bắt đầu <span aria-hidden="true">↗</span></button>
+      <p class="title-tagline" id="title-tagline" aria-hidden="true">Cầm đũa, chọn bánh, chấm nước tương và thưởng thức.</p>
+    </div>
     <div id="menu-access" class="sr-only" role="group" aria-label="Điểm tâm" hidden></div>
     <div id="next-round" hidden><button id="another-round" type="button">Thêm một xửng <span aria-hidden="true">↗</span></button></div>
     <p id="scene-hint" aria-hidden="true" hidden></p>

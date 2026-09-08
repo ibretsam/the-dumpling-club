@@ -1,3 +1,50 @@
+# The Dumpling Club · mobile and motion revision · September 8, 2026
+
+The scene stays the interface. This revision makes the site open quickly and run smoothly on phones, tightens the phone framing, and adds a few small interactions and camera touches. Interface text remains minimal (a tiny eyebrow line and a muted tagline on the welcome screen, a quiet hint); the character bubbles and tasting reactions are kept and slightly polished.
+
+## Loading
+
+- The single 7 MB float `assets/dumplings.glb` is replaced by one quantized file per dish in `assets/dumplings/` (`KHR_mesh_quantization`; 690–875 KB each, 4.5 MB in total). `npm run build:model` writes and verifies them, including the decode error against the float geometry (≤ 1.5e-5 units).
+- All six files are requested the moment the page boots, but the welcome table only waits for its own dish. The other five arrive behind the title screen; the menu mounts each food sample as its dish lands, and ordering a dish whose file is still downloading simply waits at the table. A failed download falls back to the procedural generator for that dish, as before.
+- The loader shows real download progress. `modulepreload` hints for three.js and the loader, and a `preload` for the first dish, start the large downloads before the module graph is discovered.
+
+## Runtime performance (phones first)
+
+- `js/quality.js`: the device tier sets a pixel-ratio cap (1.5 on phones, 2 elsewhere), 320 px face canvases repainted at most 20 times a second on phones (512 px / 30 Hz on desktop), and an adaptive-resolution governor that steps the pixel ratio by 0.25 from measured frame times (down after one slow window, up after three fast ones, with a cooldown so it never oscillates).
+- Pointer hit tests raycast a hidden low-poly ellipsoid per dumpling instead of the 60k-triangle body, so hover and taps stay cheap.
+- The stall's static clutter and the steamer's strips, loops and slats are merged into one mesh per material (79 fewer draw calls in the stall; the welcome frame drops from 167 to 113 draw calls including the shadow pass).
+- Bubbles measure themselves once and freeze their width; positioning no longer reads layout every frame. Cursor class and hint DOM writes are deduplicated; the menu texture is redrawn once per settled resize instead of on every resize event.
+
+## Phone UX
+
+- Portrait framing is retuned (`FRAMING` in `js/main.js`): the table shot pulls back less and looks a little higher and forward, so the sign, basket, chopsticks and sauce all fit with far less empty foreground; the welcome shot looks lower with a smaller field of view, so less blank wall sits above the awning.
+- A mute button joins the language switch in the top corners (the `M` key had no equivalent on touch screens). Both fade a little while the camera travels.
+- The hint stays a 12 px line but gains a faint translucent backing and sits centred in the thumb zone on phones; the Another round button does the same. Buttons use `touch-action: manipulation` to avoid the double-tap zoom delay.
+- Short haptic pulses on pick and bite where the browser supports vibration (Android).
+- On Android the phone's tilt shifts the table camera slightly (no permission prompt is ever shown; iOS keeps a gentle camera breath instead). Reduced motion disables all of it.
+
+## Interaction and animation
+
+- Poke: tapping a seated dumpling before the chopsticks are up makes it hop, blink and complain in its own voice; the neighbours glance over. Nothing is picked.
+- Seated dumplings follow the pointer with their eyes whenever nothing more interesting is happening; on touch screens they glance at the tap point for a moment.
+- Each chomp pushes the camera a little toward the food (with a small field-of-view pinch) on top of the existing shake.
+- After a few quiet seconds at an idle table the resting chopsticks glow softly, so a first visit, especially on a phone with no hover, knows where to start.
+- The vignette deepens slightly during camera flights. Bubbles pop in with a small overshoot, carry a tail pointing at the speaker, shrink away, and steer around the tasting reaction while it is up. The welcome eyebrow, Play button and tagline rise in with staggered timing.
+
+## Verification
+
+- `npm test`: ten geometry/contact cases pass.
+- `npm run test:browser`: all six dishes at portions 3 and 8 complete pick, dip, return and bite against the new quantized per-dish files: no grip drift, no shaft penetration, no porcelain intersection, and every dish acquires sauce.
+- `npm run test:ui`: desktop physical-menu hover, portion choice, ordering, sound unlock/mute, chopstick pickup, empty/loaded holder return, pick/dip/return/eat, reopening the board, keyboard interaction and empty-steamer refill pass; axe WCAG 2 A/AA and 2.1 AA report no violations at the table (the mute button is part of the audited page). The complete touch loop passes at 390×844, 320×568 and 844×390, and reduced motion passes.
+- `npm run test:scenes`: camera continuity holds with the retuned portrait framing (largest per-frame field-of-view step 0.47°, largest arrival jump 0.016 units).
+- `npm run test:i18n`: Vietnamese default, saved/invalid/blocked storage, three names on every menu row, translated voices and hints (including the new poke lines and the tagline, eyebrow and sound labels), switching with held food, a complete round and the return to the menu pass at all four sizes; bubbles stay inside the viewport and never overlap. The bubble width freeze initially caused an extra wrapped line on phones; one extra pixel of width fixed it and the suite was re-run.
+- `npm run test:characters`: silhouettes, temperaments, trilingual voices and portrait renders pass with the dishes reported as loaded from the GLB files.
+- Measured in the in-app browser: the welcome frame draws 113 calls instead of 167; the first dish file is 690 KB and is fetched exactly once (the preload is reused); a 375×812 viewport starts at pixel ratio 1.5.
+
+Touch checks use Chrome emulation; a physical iPhone/Android remains unverified, so the tilt parallax (Android only) and haptics were checked for guarded code paths, not felt on a device.
+
+---
+
 # The Dumpling Club · scene revision · September 8, 2026
 
 The experience now lives in the miniature stall. Play opens the physical menu; a small Another round button appears after the last bite and returns to that menu. The toolbar, kitchen panel, menu dialog, bottom action panel, remaining-food counter, and help/round dialogs remain removed. At the user’s request, short character bubbles, tasting reactions, and a quiet 12px contextual hint in the bottom corner are present.

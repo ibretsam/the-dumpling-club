@@ -52,6 +52,7 @@
 import * as THREE from 'three';
 import { COLORS, DUMPLING, PERSONALITIES } from './config.js';
 import { motion } from './motion.js';
+import { quality } from './quality.js';
 import { tween, Ease, clamp, damp } from './tween.js';
 import { FacePainter } from './faces.js';
 import { characterFor } from './characters.js';
@@ -61,7 +62,7 @@ import { getType, measureUvInfo } from './dumpling-geometry.js';
 // Tunables
 // ---------------------------------------------------------------------------------------------
 
-const PAINT_INTERVAL = 1 / 30;      // max face repaint rate (s)
+// Face repaint rate and canvas size come from quality.js (a phone paints 320 px faces at 20 Hz).
 const EYE_Y = 0.21;                 // object-space height of the eyes (face centre is ~0.20)
 const HOP_PEAK = 0.035;             // max hop height (units) at strength 1
 const BREATH_AMP = 0.02;            // ±2 % on scale y
@@ -81,6 +82,18 @@ const quant = (v, steps) => Math.round(v * steps) / steps;
 const _v1 = new THREE.Vector3();
 const _v2 = new THREE.Vector3();
 const _euler = new THREE.Euler();
+
+// Pointer hit tests use one shared low-poly ellipsoid per dumpling instead of the 60k-triangle
+// body: raycasting a hover every frame stays cheap, and taps get a slightly generous target.
+let HIT_GEOMETRY = null;
+let HIT_MATERIAL = null;
+function hitProxyParts() {
+  if (!HIT_GEOMETRY) {
+    HIT_GEOMETRY = new THREE.SphereGeometry(1, 12, 8);
+    HIT_MATERIAL = new THREE.MeshBasicMaterial({ visible: false });
+  }
+  return { geometry: HIT_GEOMETRY, material: HIT_MATERIAL };
+}
 
 // ---------------------------------------------------------------------------------------------
 // Geometry: a vertex-colour-ready twin of the plain body geometry (shared, cached)
@@ -258,7 +271,7 @@ export class Dumpling {
     this._bodyGeometry = withVertexColors(bodyGeometry);
     this._bittenGeometry = bittenGeometry ? withVertexColors(bittenGeometry) : null;
 
-    this.painter = new FacePainter({ personality: this.personality, stretch: measureFaceStretch(this.type), faceUV: this.type.faceUV, skin: this.type.skin });
+    this.painter = new FacePainter({ personality: this.personality, size: quality.faceSize, stretch: measureFaceStretch(this.type), faceUV: this.type.faceUV, skin: this.type.skin });
     this.material = buildBodyMaterial(this.painter.texture, this.type);
     this.uniforms = this.material.userData.uniforms;
 
@@ -273,6 +286,19 @@ export class Dumpling {
     this.body.add(this.mesh);
     this.extras = [];
     this._buildExtras();
+    {
+      const m = this.type.metrics;
+      const parts = hitProxyParts();
+      const proxy = new THREE.Mesh(parts.geometry, parts.material);
+      proxy.name = 'HitProxy';
+      proxy.visible = false;                       // the raycaster ignores visibility; the renderer does not
+      proxy.castShadow = false; proxy.receiveShadow = false;
+      proxy.scale.set((m.length || m.radius * 2) * 0.56, m.height * 0.58, (m.depth || m.radius * 2) * 0.56);
+      proxy.position.y = m.height * 0.5;
+      proxy.userData.dumpling = this;
+      this.body.add(proxy);
+      this.hitProxy = proxy;
+    }
     this.group.add(this.body);
     this.group.userData.dumpling = this;
     this.body.userData.dumpling = this;
@@ -625,7 +651,7 @@ export class Dumpling {
 
     if (alive) {
       this._paintAccum += dt;
-      if (this._faceDirty || this._paintAccum >= PAINT_INTERVAL) {
+      if (this._faceDirty || this._paintAccum >= quality.paintInterval) {
         this._paintAccum = 0;
         this._paintFace(false);
       }

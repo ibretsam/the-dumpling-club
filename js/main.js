@@ -4,12 +4,13 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { COLORS, LAYOUT, STEAMER, PLATE, BOWL, arrangement, PERSONALITIES } from './config.js';
-import { DUMPLING_TYPES, getType, buildTypeGeometry } from './dumpling-geometry.js';
+import { DUMPLING_TYPES, TYPE_IDS, getType, buildTypeGeometry } from './dumpling-geometry.js';
 import { motion, detectReducedMotion } from './motion.js';
+import { quality, configureQuality, AdaptiveResolution } from './quality.js';
 import { updateTweens, tween, wait, Ease, cancelAllTweens, damp, clamp } from './tween.js';
 import { createRenderer, createScene, createCamera, createLights, createEnvironment, isMobile } from './scene-setup.js';
 import { buildBambooSteamer, buildPorcelainPlate, buildSoyBowl, buildChopsticks, buildChopstickRest } from './steamer.js';
-import { buildStall } from './stall.js';
+import { buildStall, mergeStaticMeshes } from './stall.js';
 import { MenuBoard } from './menu-board.js';
 import { Dumpling } from './dumpling.js';
 import { SteamSystem } from './steam.js';
@@ -52,12 +53,30 @@ let lastHintKey = '';
 
 async function boot() {
   const canvas = document.getElementById('scene');
+  configureQuality({ mobile: isMobile, devicePixelRatio: window.devicePixelRatio || 1 });
+  // Every dish starts downloading now. The welcome table only waits for its own dish; the other
+  // five arrive behind the title screen, so a phone opens after one small file instead of six.
+  app.geometries = createGeometryRegistry({
+    onProgress: () => { try { app.ui?.setProgress(app.geometries.progressOf(typeIdsFor(state.menu))); } catch (e) { /* the loader must never break a download */ } },
+  });
   const renderer = createRenderer(canvas);
   const scene = createScene();
   const camera = createCamera();
   const lights = createLights(scene);
   createEnvironment(renderer, scene);
   Object.assign(app, { canvas, renderer, scene, camera, lights });
+
+  app.ui = new UI({
+    onPlay: () => play(),
+    onLanguage: language => changeLanguage(language),
+    onMenu: () => openMenu(),
+    onOrder: (id, portion) => order(id, portion),
+    onMenuFocus: i => app.menuBoard.setHover(i),
+    onMenuSelect: i => chooseDish(i),
+    onMenuPortion: n => setMenuPortion(n),
+    onSound: () => toggle('sound'),
+  });
+  app.adaptive = new AdaptiveResolution({ apply: () => onResize() });
 
   state.reducedMotionPref = detectReducedMotion();
   applyMotion();
@@ -72,6 +91,7 @@ async function boot() {
   // Props.
   app.stall = buildStall(); scene.add(app.stall.group);
   app.steamer = buildBambooSteamer(); scene.add(app.steamer.group);
+  mergeStaticMeshes(app.steamer.group); // stitch loops, strips and slats: one mesh per material
   app.plate = buildPorcelainPlate(); scene.add(app.plate.group); app.plate.group.visible = false;
   app.bowl = buildSoyBowl(); app.bowl.group.position.set(LAYOUT.bowl.x, LAYOUT.bowl.y, LAYOUT.bowl.z); scene.add(app.bowl.group);
   app.rest = buildChopstickRest(); app.rest.group.position.set(LAYOUT.chopstickRest.x, LAYOUT.chopstickRest.y, LAYOUT.chopstickRest.z); app.rest.group.rotation.y = LAYOUT.chopstickRest.yaw || 0; scene.add(app.rest.group);
@@ -89,16 +109,6 @@ async function boot() {
   app.audio.enabled = state.sound;
   app.recorder = new BiteRecorder({ renderer, size: 1080, fps: 30, camera });
 
-  app.ui = new UI({
-    onPlay: () => play(),
-    onLanguage: language => changeLanguage(language),
-    onMenu: () => openMenu(),
-    onOrder: (id, portion) => order(id, portion),
-    onMenuFocus: i => app.menuBoard.setHover(i),
-    onMenuSelect: i => chooseDish(i),
-    onMenuPortion: n => setMenuPortion(n),
-  });
-
   app.chop = new ChopstickController(app.chopsticks);
   app.crowd = new Crowd({ ui: app.ui, camera, getDumplings: () => dumplings });
   app.interaction = new Interaction({
@@ -112,11 +122,11 @@ async function boot() {
     onPhase: () => updateHint(true),
   });
 
-  // Dumpling geometry: from the GLB, else procedural.
-  app.geometries = await loadGeometries();
+  // The board mounts each food sample as its dish arrives; the welcome table needs its dish now.
   app.menuBoard = new MenuBoard(app.stall.menuBoard, MENU_ITEMS, app.geometries, app.audio);
+  await app.geometries.ready(typeIdsFor(state.menu));
 
-  app.camState = camState; app.camLook = camLook; app.shots = SHOTS; app.flyTo = flyTo;
+  app.camState = camState; app.camLook = camLook; app.shots = SHOTS; app.flyTo = flyTo; app.framing = FRAMING;
   wireInput();
   onResize();
   window.addEventListener('resize', onResize);
@@ -144,10 +154,12 @@ async function boot() {
   app.run = async (n = 60, dt = 1 / 60) => { for (let i = 0; i < n; i++) { app.step(dt, 1); await yieldTask(); } };
   renderer.setAnimationLoop(() => {
     const now = performance.now();
-    let dt = Math.min(0.05, (now - last) / 1000);
+    const raw = (now - last) / 1000;
+    let dt = Math.min(0.05, raw);
     last = now;
     dt *= motion.timeScale;
     time += dt;
+    if (!state.recording) app.adaptive.update(raw);
     try { frame(dt, time); } catch (err) { if (!app.frameError) { app.frameError = err; console.error('frame error', err); } }
   });
 
@@ -160,34 +172,72 @@ const MENU_ITEMS = [
   { id: 'assorted', name: 'Chef\u2019s basket', cn: '点心拼盘', tag: 'Assorted · a little of everything', description: 'The chef chooses: a mixed steamer with one of each, so nobody has to decide.' },
 ];
 const pascal = (id) => id.charAt(0).toUpperCase() + id.slice(1);
+/** The dish types a menu choice needs before it can be served. */
+const typeIdsFor = (menuId) => (menuId === 'assorted' ? TYPE_IDS.slice() : [menuId]);
 
-/** Geometry registry: meshes from assets/dumplings.glb, with a procedural fallback per type. */
-async function loadGeometries() {
-  const fromGlb = await new Promise((resolve) => {
-    try {
-      const loader = new GLTFLoader();
-      loader.load('assets/dumplings.glb', (gltf) => {
-        const byName = {};
-        gltf.scene.traverse((o) => { if (o.isMesh) byName[o.name] = o.geometry; });
-        resolve(Object.keys(byName).length ? byName : null);
-      }, undefined, () => resolve(null));
-    } catch (e) { resolve(null); }
-  });
-  if (!fromGlb) console.warn('dumplings.glb unavailable, building the dumplings procedurally');
-  const cache = {};
-  return {
-    source: fromGlb ? 'glb' : 'procedural',
-    get(typeId) {
-      if (cache[typeId]) return cache[typeId];
-      const body = fromGlb && fromGlb[pascal(typeId) + 'Body'];
-      const bitten = fromGlb && fromGlb[pascal(typeId) + 'Bitten'];
-      cache[typeId] = {
-        body: body || buildTypeGeometry(typeId),
-        bitten: bitten || buildTypeGeometry(typeId, { bitten: true }),
-      };
-      return cache[typeId];
+/**
+ * Geometry registry. Each dish is a small quantized GLB in assets/dumplings/, all requested in
+ * parallel the moment this is created. `ready(ids)` resolves once those dishes are usable (loaded,
+ * or fallen back to the procedural generator after a failed download); `get(id)` is synchronous and
+ * never blocks — if a dish is asked for before it arrived, it is built procedurally on the spot.
+ */
+function createGeometryRegistry({ onProgress } = {}) {
+  const loaded = {};     // id -> { body, bitten } from the GLB
+  const fallback = {};   // id -> { body, bitten } built procedurally
+  const promises = {};   // id -> Promise<boolean> (true when the GLB arrived)
+  const progress = {};   // id -> { loaded, total }
+  let pending = DUMPLING_TYPES.length;
+  const registry = {
+    source: 'glb',       // where the welcome dish came from
+    loaded: false,       // every dish resolved (GLB or fallback)
+    get(id) {
+      if (loaded[id]) return loaded[id];
+      if (!fallback[id]) {
+        console.warn(`dumplings/${id}.glb is not available yet; building the dish procedurally`);
+        fallback[id] = { body: buildTypeGeometry(id), bitten: buildTypeGeometry(id, { bitten: true }) };
+      }
+      return fallback[id];
+    },
+    ready(ids = TYPE_IDS) { return Promise.all(ids.map((id) => promises[id] || Promise.resolve(false))); },
+    /** 0..1 download progress of the given dishes (bytes, once the sizes are known). */
+    progressOf(ids = TYPE_IDS) {
+      let got = 0, total = 0, done = 0;
+      for (const id of ids) { const p = progress[id]; if (!p) continue; got += p.loaded; total += p.total; if (p.done) done++; }
+      if (done === ids.length) return 1;
+      return total > 0 ? Math.min(0.99, got / total) : 0;
     },
   };
+  let loader = null;
+  try { loader = new GLTFLoader(); } catch (e) { loader = null; }
+  for (const type of DUMPLING_TYPES) {
+    const id = type.id;
+    const p = progress[id] = { loaded: 0, total: 0, done: false };
+    promises[id] = new Promise((resolve) => {
+      const done = (ok) => {
+        p.done = true;
+        if (id === state.menu || !loaded[state.menu]) registry.source = ok ? 'glb' : 'procedural';
+        if (--pending === 0) registry.loaded = true;
+        onProgress?.();
+        resolve(ok);
+      };
+      if (!loader) { done(false); return; }
+      loader.load(`assets/dumplings/${id}.glb`, (gltf) => {
+        const byName = {};
+        gltf.scene.traverse((o) => { if (o.isMesh) byName[o.name] = o.geometry; });
+        const body = byName[pascal(id) + 'Body'], bitten = byName[pascal(id) + 'Bitten'];
+        if (body && bitten) loaded[id] = { body, bitten };
+        else console.warn(`dumplings/${id}.glb has no ${pascal(id)}Body/${pascal(id)}Bitten meshes; using the procedural dish`);
+        done(!!loaded[id]);
+      }, (ev) => {
+        p.loaded = ev.loaded; if (ev.total) p.total = ev.total;
+        onProgress?.();
+      }, (err) => {
+        console.warn(`dumplings/${id}.glb could not be loaded; building the dish procedurally`, err);
+        done(false);
+      });
+    });
+  }
+  return registry;
 }
 
 // ------------------------------------------------------------------ vessel & dumplings
@@ -265,7 +315,7 @@ function order(id, portion) {
   app.menuBoard.setPortion(state.portion);
   app.ui.setMenuPortion(state.portion);
   if (state.scene === 'menu') closeMenu();
-  else if (state.scene === 'table') refill();
+  else if (state.scene === 'table') app.geometries.ready(typeIdsFor(id)).then(() => { if (state.scene === 'table' && state.menu === id) refill(); });
 }
 
 // ------------------------------------------------------------------ scenes: title → menu board → table
@@ -336,7 +386,8 @@ async function closeMenu() {
   app.interaction.onPointerLeave();
   app.pointerHas = false;
   app.audio.play('whoosh', { volume: .3, pitch: .9 });
-  await flyTo(SHOTS.table, { duration: 1.5, arc: .25 });
+  // The dish usually arrived long ago; on a slow connection the camera simply waits at the table.
+  await Promise.all([flyTo(SHOTS.table, { duration: 1.5, arc: .25 }), app.geometries.ready(typeIdsFor(state.menu))]);
   state.scene = 'table';
   app.ui.setCinematic(false);
   // Serve only when the camera arrives, so the fresh-basket animation is actually seen.
@@ -605,11 +656,44 @@ function wireInput() {
     if(interaction.onKey(e.key)) e.preventDefault();
   });
   app.pointerNdc=new THREE.Vector2(); app.pointerHas=false;
+  wireTilt();
+}
+
+/**
+ * Device tilt → small camera parallax on phones. Only where orientation events arrive without a
+ * permission dialog (Android browsers); iOS keeps the gentle drift instead. The resting angle is
+ * re-learned slowly, so however the phone is held is neutral and only quick tilts move the shot.
+ */
+function wireTilt() {
+  app.tilt = { x: 0, y: 0 };
+  const DOE = window.DeviceOrientationEvent;
+  if (!quality.mobile || typeof DOE === 'undefined' || typeof DOE.requestPermission === 'function') return;
+  let baseG = null, baseB = null;
+  window.addEventListener('deviceorientation', (e) => {
+    if (typeof e.gamma !== 'number' || typeof e.beta !== 'number') return;
+    let g = e.gamma, b = e.beta;
+    const angle = (screen.orientation && screen.orientation.angle) || 0;
+    if (angle === 90) { const t = g; g = b; b = -t; } else if (angle === 270) { const t = g; g = -b; b = t; }
+    if (baseG === null) { baseG = g; baseB = b; }
+    baseG += (g - baseG) * 0.006; baseB += (b - baseB) * 0.006;
+    app.tilt.x = clamp((g - baseG) / 22, -1, 1);
+    app.tilt.y = clamp((baseB - b) / 22, -1, 1);
+  }, { passive: true });
 }
 
 // ------------------------------------------------------------------ camera, hint, resize
 
 const SHOTS = {};
+// Responsive framing knobs (portrait phones blend toward these; landscape uses the raw shots).
+const FRAMING = {
+  tablePullBack: 2.5,   // camera moves back this far on a fully portrait table
+  tableLift: 0.95,      // ...and up this far
+  tableSlide: -0.3,     // ...and left this far
+  tableLookY: 0.42,     // look-at rises so the sign clears the corner controls and the basket, sticks and bowl all fit
+  tableLookZ: 0.3,      // look-at comes forward so the tabletop foreground is not half the frame
+  introLookY: -0.55,    // the welcome shot looks lower on portrait screens (less empty wall)
+  introFov: 14,         // extra vertical fov for the welcome shot on portrait screens
+};
 const camState = { tableBlend: 0, menuBlend: 0, pos: new THREE.Vector3(LAYOUT.cameraPos.x, LAYOUT.cameraPos.y, LAYOUT.cameraPos.z), look: new THREE.Vector3(LAYOUT.cameraLookAt.x, LAYOUT.cameraLookAt.y, LAYOUT.cameraLookAt.z), fov: LAYOUT.fov };
 const camLook = new THREE.Vector3(LAYOUT.cameraLookAt.x, LAYOUT.cameraLookAt.y, LAYOUT.cameraLookAt.z);
 const camOffset = new THREE.Vector3();
@@ -647,18 +731,21 @@ function updateCamera(dt, time) {
   const aspect = camera.aspect || 1;
   const narrow = clamp((1.25 - aspect) / 0.8, 0, 1);
   // Parallax from the pointer (only at the table; never in reduced motion or while recording).
+  // Phones have no pointer: a small tilt of the device (where the browser exposes it without a
+  // permission prompt) moves the camera the same way, and the shot breathes very slightly.
   const live = table && !motion.reduced && !square && app.pointerHas;
-  const px = live ? app.pointerNdc.x : 0;
-  const py = live ? app.pointerNdc.y : 0;
+  const handheld = table && !motion.reduced && !square && !app.pointerHas && quality.mobile ? 1 : 0;
+  const px = live ? app.pointerNdc.x : handheld * app.tilt.x;
+  const py = live ? app.pointerNdc.y : handheld * app.tilt.y;
   // Narrow (portrait) screens pull the table shot back; square recordings push in slightly.
   const tNarrow = camState.tableBlend * (square ? -0.12 : narrow);
-  camOffset.x = damp(camOffset.x, px * 0.12 - 0.35 * tNarrow, 3, dt);
-  camOffset.y = damp(camOffset.y, py * 0.06 + 1.15 * tNarrow, 3, dt);
-  camOffset.z = damp(camOffset.z, 3.3 * tNarrow, 3, dt);
-  // A slow drift while the title screen is up.
+  camOffset.x = damp(camOffset.x, px * 0.12 + FRAMING.tableSlide * tNarrow, 3, dt);
+  camOffset.y = damp(camOffset.y, py * 0.06 + FRAMING.tableLift * tNarrow, 3, dt);
+  camOffset.z = damp(camOffset.z, FRAMING.tablePullBack * tNarrow, 3, dt);
+  // A slow drift while the title screen is up; a much smaller breath at a handheld table.
   const drifting = state.scene === 'title' && !motion.reduced ? 1 : 0;
-  camDrift.x = damp(camDrift.x, Math.sin(time * 0.21) * 0.5 * drifting, 2, dt);
-  camDrift.y = damp(camDrift.y, Math.sin(time * 0.33 + 1) * 0.16 * drifting, 2, dt);
+  camDrift.x = damp(camDrift.x, Math.sin(time * 0.21) * 0.5 * drifting + Math.sin(time * 0.23) * 0.045 * handheld, 2, dt);
+  camDrift.y = damp(camDrift.y, Math.sin(time * 0.33 + 1) * 0.16 * drifting + Math.sin(time * 0.31 + 1) * 0.02 * handheld, 2, dt);
   camDrift.z = damp(camDrift.z, Math.cos(time * 0.17) * 0.25 * drifting, 2, dt);
 
   camTmp.copy(camState.look);
@@ -666,10 +753,16 @@ function updateCamera(dt, time) {
     camTmp.x += square ? (0.78 - camLook.x) : 0;
     camTmp.y += square ? 0.12 : 0;
   }
-  camTmp.y += square ? 0 : .3 * narrow * camState.tableBlend;
-  camTmp.z += .1 * narrow * camState.tableBlend;
+  const introBlend = clamp(1 - camState.tableBlend - camState.menuBlend, 0, 1);
+  camTmp.y += square ? 0 : FRAMING.tableLookY * narrow * camState.tableBlend + FRAMING.introLookY * narrow * introBlend;
+  camTmp.z += FRAMING.tableLookZ * narrow * camState.tableBlend;
   camLookCur.lerp(camTmp, 1 - Math.exp(-5 * dt));
   camera.position.copy(camState.pos).add(camOffset).add(camDrift);
+  // A chomp pushes the camera a little toward the food and back (with the existing shake).
+  if (interaction.punch > 0 && !motion.reduced) {
+    camTmp.subVectors(camLookCur, camera.position).normalize();
+    camera.position.addScaledVector(camTmp, interaction.punch * 0.16);
+  }
   if (interaction.shake > 0 && !motion.reduced) {
     const sh = interaction.shake * 0.018;
     camera.position.x += (Math.random() - 0.5) * sh;
@@ -677,13 +770,15 @@ function updateCamera(dt, time) {
   }
   camera.lookAt(camLookCur);
   const menuFov = THREE.MathUtils.radToDeg(2 * Math.atan(Math.max(1.65, 1.27 / aspect) / (2 * 2.45)));
-  const fov = square ? 31 : camState.fov
+  const fov = (square ? 31 : camState.fov
     + camState.tableBlend * clamp((1.25-aspect)*18,0,22)
     + camState.menuBlend * Math.max(0,menuFov-SHOTS.menu.fov)
-    + (1-camState.tableBlend-camState.menuBlend) * narrow * 18;
+    + introBlend * narrow * FRAMING.introFov)
+    - (motion.reduced ? 0 : interaction.punch * 1.6);
   if (Math.abs(camera.fov - fov) > 0.01) { camera.fov = fov; camera.updateProjectionMatrix(); }
 }
 
+let menuRedrawTimer = 0;
 function onResize() {
   const { renderer, camera } = app;
   if (state.recording) {
@@ -693,9 +788,12 @@ function onResize() {
   }
   const w = window.innerWidth, h = window.innerHeight;
   if (!(w > 0 && h > 0)) return; // hidden or collapsed window: keep the previous framing
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  renderer.setPixelRatio(quality.pixelRatio);
   renderer.setSize(w, h, false);
-  app.menuBoard?.draw();
+  app.adaptive?.reset();
+  // The board's headline size depends on the viewport; redraw once the resize has settled.
+  clearTimeout(menuRedrawTimer);
+  menuRedrawTimer = setTimeout(() => app.menuBoard?.draw(), 120);
   camera.aspect = w / h;
   camera.updateProjectionMatrix(); // fov follows the current shot in updateCamera
 }

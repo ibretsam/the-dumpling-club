@@ -8,6 +8,8 @@ try {
   const page=await browser.newPage({viewport:{width:1200,height:800},reducedMotion:'reduce'});
   const errors=[];page.on('pageerror',e=>errors.push(e.message));
   await page.goto(process.env.TEST_URL||'http://127.0.0.1:8080');await page.waitForFunction(()=>dumplingClub.step);
+  // Dishes stream in one file each; the portraits need every one of them.
+  await page.waitForFunction(()=>dumplingClub.geometries.loaded);
   const report=await page.evaluate(async()=>{
     const a=dumplingClub,T=await import('/lib/three.module.js');
     const {DUMPLING_TYPES}=await import('/js/dumpling-geometry.js');

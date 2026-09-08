@@ -5,7 +5,7 @@ A cozy, interactive miniature food scene built with Three.js: a steamer of very 
 Order from the menu, pick up the chopsticks, choose a dumpling, dip it, and take a bite. The others will watch.
 
 Everything is local: no CDN, no build step, no image files (all textures are generated
-procedurally), and the dumplings are a glTF binary model in `assets/dumplings.glb`.
+procedurally), and the dumplings are small glTF binary models, one per dish, in `assets/dumplings/`.
 
 ## The menu
 
@@ -27,10 +27,10 @@ The experience defaults to **Vietnamese**. The small **VI / EN / 中文** switch
 
 1. **Play.** The camera moves through the stall to the physical menu; sound starts with this gesture.
 2. **Choose on the board.** Hover a dish to lift its little food sample. Tap it to order, then watch the camera travel to a freshly served basket.
-3. **Pick up the chopsticks.** Click or tap the resting sticks first, then choose a dumpling. Sauce → dip. Steamer → return the dumpling. Chopstick rest → put the sticks down. Anywhere else while carrying → eat.
+3. **Pick up the chopsticks.** Click or tap the resting sticks first, then choose a dumpling. Sauce → dip. Steamer → return the dumpling. Chopstick rest → put the sticks down. Anywhere else while carrying → eat. Poking a dumpling with a bare finger (before the sticks are up) only makes it hop and complain. After a few quiet seconds the resting chopsticks glow softly so a first visit knows where to start.
 4. **Another round.** After the last bite, the small **Another round** button takes the camera back to the wooden menu. Tap the empty steamer to repeat the same order instead.
 
-A small corner hint suggests the next gesture. On the phone menu it moves above the board to stay clear of the sauce bowl. Short character bubbles follow the dumplings on hover and pickup, and tasting reactions appear while eating. There are no gameplay toolbars or menu dialogs; the small language switch accompanies Play and the end-of-round Another round. Facial expressions, soft movement, steam, sound, and object hover responses carry the experience.
+A small corner hint suggests the next gesture. On the phone menu it moves above the board to stay clear of the sauce bowl. Short character bubbles follow the dumplings on hover, poke and pickup, and tasting reactions appear while eating. There are no gameplay toolbars or menu dialogs; a mute button and the language switch sit in the top corners, and Play and the end-of-round Another round are the only other buttons. Facial expressions, soft movement, steam, sound, and object hover responses carry the experience: seated dumplings follow the pointer with their eyes, each chomp nudges the camera, and on Android the phone's tilt shifts the table shot a little.
 
 ## The characters
 
@@ -82,7 +82,7 @@ Mouse and touch use the same scene gestures. Pick up the chopsticks before choos
 | Arrow keys at the table | Choose a dumpling while holding chopsticks |
 | `D` / `B` / `Esc` | Dip / eat / put back |
 | `O` / `R` | Open menu / refill |
-| `M` | Mute / unmute (sound starts on) |
+| `M` | Mute / unmute (sound starts on; the corner button does the same on touch screens) |
 | `Space` / `A` / `S` | Boing / autoplay / steam |
 | `V` | Record an automatic bite |
 | `Esc` or a scene tap while recording | Finish recording |
@@ -97,14 +97,26 @@ Recording saves a local 1080 × 1080 video, targeting 30 fps (MP4 where supporte
 npm run build:model
 ```
 
-writes `assets/dumplings.glb` (every dish, body and bitten variants) from the procedural generators
-in `js/dumpling-geometry.js`: a gathered-top lathe family, a pleated crescent family, and the
-open-top siu mai.
+writes one file per dish to `assets/dumplings/<type>.glb` (body and bitten variants) from the
+procedural generators in `js/dumpling-geometry.js`: a gathered-top lathe family, a pleated crescent
+family, and the open-top siu mai. Attributes are quantized (`KHR_mesh_quantization`, ~0.7 MB per
+dish instead of 7 MB for the old single float file). The page requests all six files at once but
+only waits for the dish on the welcome table; the rest arrive behind the title screen, and any file
+that fails to load is rebuilt procedurally in the browser.
+
+## Phones
+
+The site is tuned for a phone as much as a desktop: the renderer starts at a capped pixel ratio and
+steps it down (and back up) from measured frame times, faces are painted on smaller canvases at a
+lower rate, pointer hit tests use low-poly proxies instead of the 60k-triangle bodies, and the stall's
+static clutter is merged into a few draw calls. Portrait screens get their own camera framing for the
+welcome shot and the table.
 
 ## Layout
 
 - `index.html`, `css/style.css` — page and styling
-- `js/main.js` — boot, camera flow, render loop, autoplay and recording directors
+- `js/main.js` — boot, progressive dish loading, camera flow, render loop, autoplay and recording directors
+- `js/quality.js` — device tier (face size, repaint rate, pixel-ratio limits), adaptive resolution, haptics
 - `js/characters.js` — persistent facial features, blink/gaze timing, gesture reactions and translated character voices
 - `js/i18n.js` — shared Vietnamese, English and Chinese text, menu name hierarchy, remembered locale
 - `js/menu-board.js` — physical menu texture, miniature food samples, UV hit testing

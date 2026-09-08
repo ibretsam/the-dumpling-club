@@ -1,57 +1,108 @@
-/* A warm, quiet table. Fonts are bundled locally; the game works without a network. */
+/* A warm, quiet table. The scene is the interface: the little chrome that exists stays small,
+   translucent and out of the way. Fonts are bundled locally; the game works without a network. */
 @font-face { font-family: 'Be Vietnam Pro'; src: url('../assets/fonts/be-vietnam-pro-400.ttf') format('truetype'); font-weight: 400; font-display: swap; }
 @font-face { font-family: 'Be Vietnam Pro'; src: url('../assets/fonts/be-vietnam-pro-600.ttf') format('truetype'); font-weight: 500 800; font-display: swap; }
 @font-face { font-family: 'DM Sans'; src: url('../assets/fonts/dm-sans-600.ttf') format('truetype'); font-weight: 500 800; font-display: swap; }
 @font-face { font-family: Fraunces; src: url('../assets/fonts/fraunces-600.ttf') format('truetype'); font-weight: 500 800; font-display: swap; }
-:root { color-scheme: light; font-family: 'Be Vietnam Pro', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif; color: #49382c; background: #f5ebdd; }
+:root {
+  color-scheme: light;
+  --ui-font: 'Be Vietnam Pro', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif;
+  --display-font: Fraunces, Georgia, serif;
+  --ink: #49382c; --ink-soft: #7a6555; --accent: #a74329; --accent-deep: #8e3520; --paper: #fff8ec;
+  --ease-out: cubic-bezier(.22, 1, .36, 1); --ease-pop: cubic-bezier(.2, 1.4, .4, 1);
+  font-family: var(--ui-font); color: var(--ink); background: #f5ebdd;
+}
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
 html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; overscroll-behavior: none; }
+button { font-family: inherit; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
 #scene { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; outline: none; }
 #scene:focus-visible { outline: 2px solid #a7432966; outline-offset: -2px; }
 #scene.is-pointer { cursor: pointer; } #scene.is-grab { cursor: grab; } #scene.is-grabbing { cursor: grabbing; }
-body::after { content: ''; position: fixed; inset: 0; pointer-events: none; box-shadow: inset 0 0 160px #6e45181a; }
+/* A soft vignette that deepens a little while the camera travels, like a lens breathing in. */
+body::after { content: ''; position: fixed; inset: 0; pointer-events: none; box-shadow: inset 0 0 160px #6e45181a; transition: box-shadow .9s var(--ease-out); }
+body.is-cinematic::after { box-shadow: inset 0 0 220px #5a37123d; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
-#title-screen { position: fixed; inset: 0; display: flex; align-items: flex-end; justify-content: center; padding-bottom: max(7vh, env(safe-area-inset-bottom)); pointer-events: none; transition: opacity .4s; }
+
+/* Title: the stall itself is the title card. A tiny eyebrow, the Play button and one muted line. */
+#title-screen { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 14px; padding-bottom: max(6vh, env(safe-area-inset-bottom)); pointer-events: none; transition: opacity .45s; }
 #title-screen.is-hidden { opacity: 0; visibility: hidden; }
-#play-button { pointer-events: auto; display: flex; align-items: center; gap: 36px; border: 1px solid #a95835; border-radius: 50px; background: #a74329; color: #fff8eb; padding: 17px 30px; box-shadow: 0 8px 30px #82442533; font: 600 22px Fraunces, Georgia, serif; cursor: pointer; transition: transform .25s, background .25s; -webkit-tap-highlight-color: transparent; }
-#play-button span { font: 400 23px 'Be Vietnam Pro', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif; }
-#play-button:hover { transform: translateY(-3px); background: #8e3520; }
+.title-eyebrow { margin: 0 0 2px; color: #9a7f68; font: 500 11px/1.4 var(--ui-font); letter-spacing: .22em; text-transform: uppercase; text-align: center; text-shadow: 0 1px 8px #fff9ed; animation: rise-in .9s var(--ease-out) .1s both; }
+.title-tagline { margin: 0; max-width: min(420px, 82vw); padding: 0 12px; color: var(--ink-soft); font: 400 12px/1.5 var(--ui-font); letter-spacing: .02em; text-align: center; text-shadow: 0 1px 8px #fff9ed; opacity: .78; animation: rise-in .9s var(--ease-out) .4s both; }
+#play-button { pointer-events: auto; display: flex; align-items: center; gap: 36px; border: 1px solid #a95835; border-radius: 50px; background: var(--accent); color: #fff8eb; padding: 17px 30px; box-shadow: 0 8px 30px #82442533; font: 600 22px var(--display-font); cursor: pointer; transition: transform .25s var(--ease-out), background .25s, box-shadow .25s; animation: rise-in .8s var(--ease-out) .2s both; }
+#play-button span { font: 400 23px var(--ui-font); transition: transform .3s var(--ease-out); }
+#play-button:hover { transform: translateY(-3px); background: var(--accent-deep); box-shadow: 0 12px 34px #82442540; }
+#play-button:hover span { transform: translate(2px, -2px); }
+#play-button:active { transform: translateY(0) scale(.98); }
 #play-button:focus-visible { outline: 3px solid #572e1c; outline-offset: 5px; }
-#loader { position: fixed; inset: 0; display: grid; place-items: center; background: #f5ebdd; z-index: 10; transition: opacity .5s, visibility .5s; }
+@keyframes rise-in { from { opacity: 0; translate: 0 10px; } to { opacity: 1; translate: 0 0; } }
+
+/* Loader: a breathing dumpling and a thin bar while the first dish downloads. */
+#loader { position: fixed; inset: 0; display: grid; place-items: center; background: #f5ebdd; z-index: 10; transition: opacity .55s, visibility .55s; }
 #loader.is-hidden { opacity: 0; visibility: hidden; }
-.loader-dumpling { display: grid; place-items: center; width: 66px; height: 58px; border-radius: 50% 50% 42% 42%; border: 2px solid #a87550; font-size: 35px; animation: breathe 1.2s ease-in-out infinite; }
-@keyframes breathe { 50% { transform: translateY(-8px) scale(1.03,.97); } }
-#toast { position: fixed; bottom: max(24px, env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%); max-width: calc(100% - 40px); padding: 12px 20px; border-radius: 20px; background: #fff8ec; box-shadow: 0 8px 28px #57322120; font-size: 14px; }
+.loader-card { display: grid; justify-items: center; gap: 12px; }
+.loader-dumpling { display: block; animation: breathe 1.3s ease-in-out infinite; transform-origin: 50% 90%; }
+.loader-text { margin: 0; display: flex; gap: 8px; color: var(--ink-soft); font: 400 12px/1.4 var(--ui-font); letter-spacing: .02em; }
+#loader-percent { min-width: 3ch; color: #a68a74; font-variant-numeric: tabular-nums; }
+.loader-bar { width: 132px; height: 3px; border-radius: 3px; background: #e6d4bd; overflow: hidden; }
+#loader-fill { display: block; width: 0; height: 100%; border-radius: 3px; background: #c9784f; transition: width .25s var(--ease-out); }
+@keyframes breathe { 50% { transform: translateY(-6px) scale(1.03, .97); } }
+
+/* Toast, recording dot. */
+#toast { position: fixed; bottom: max(24px, env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%); max-width: calc(100% - 40px); padding: 12px 20px; border-radius: 20px; background: var(--paper); box-shadow: 0 8px 28px #57322120; font-size: 14px; animation: rise-in .35s var(--ease-out); }
 #toast a { color: inherit; }
-#record-dot { position: fixed; top: 72px; right: 30px; width: 10px; height: 10px; border-radius: 50%; background: #aa3626; box-shadow: 0 0 0 5px #fff5e6b0; }
-@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+#record-dot { position: fixed; top: 72px; right: 30px; width: 10px; height: 10px; border-radius: 50%; background: #aa3626; box-shadow: 0 0 0 5px #fff5e6b0; animation: pulse 1.2s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: .45; } }
 
 /* Brief character voices follow the food and never intercept a scene gesture. */
 #bubbles { position: fixed; inset: 0; z-index: 2; pointer-events: none; overflow: hidden; }
-.bubble { position: absolute; transform: translate(-50%,-100%); max-width: min(220px,80vw); padding: 9px 14px; border: 1px solid #dfc9ae; border-radius: 16px 16px 16px 4px; background: #fff9ed; color: #49382c; box-shadow: 0 5px 20px #6241271a; font: 500 14px/1.3 'Be Vietnam Pro','PingFang SC','Microsoft YaHei','Noto Sans CJK SC',sans-serif; text-align: center; white-space: normal; overflow-wrap: break-word; animation: bubble-in .22s ease-out; transition: opacity .2s; }
-.bubble small { display: block; margin-top: 3px; color: #9c442c; font-size: 10px; }
-.bubble.is-leaving { opacity: 0; }
-#reaction { position: fixed; z-index: 3; top: max(12vh,24px); left: 50%; transform: translateX(-50%); width: max-content; max-width: 88vw; pointer-events: none; text-align: center; font: 600 clamp(27px,4vw,48px)/1.12 Fraunces,Georgia,serif; color: #963e27; text-shadow: 0 2px 12px #fff8ed, 0 0 22px #fff8ed; }
+.bubble { position: absolute; transform: translate(-50%, -100%); max-width: min(220px, 80vw); padding: 9px 14px; border: 1px solid #dfc9ae; border-radius: 16px 16px 16px 4px; background: #fff9ed; color: var(--ink); box-shadow: 0 5px 20px #6241271a; font: 500 14px/1.3 var(--ui-font); text-align: center; white-space: normal; overflow-wrap: break-word; transform-origin: 8% 100%; animation: bubble-in .32s var(--ease-pop); transition: opacity .22s, transform .22s; }
+.bubble::after { content: ''; position: absolute; left: 10px; bottom: -6px; width: 10px; height: 10px; border-right: 1px solid #dfc9ae; border-bottom: 1px solid #dfc9ae; border-radius: 0 0 3px 0; background: #fff9ed; transform: rotate(45deg); }
+.bubble small { display: block; margin-top: 3px; color: #9c442c; font-size: 10px; letter-spacing: .04em; }
+.bubble.is-leaving { opacity: 0; transform: translate(-50%, -100%) scale(.92); }
+#reaction { position: fixed; z-index: 3; top: max(12vh, 24px); left: 50%; transform: translateX(-50%); width: max-content; max-width: 88vw; pointer-events: none; text-align: center; font: 600 clamp(27px, 4vw, 48px)/1.12 var(--display-font); color: #963e27; text-shadow: 0 2px 12px #fff8ed, 0 0 22px #fff8ed; }
 #reaction.is-showing { animation: taste-reaction 2s both; }
-@keyframes bubble-in { from { opacity: 0; translate: 0 5px; } to { opacity: 1; translate: 0 0; } }
-@keyframes taste-reaction { 0%,100% { opacity: 0; translate: 0 7px; } 15%,80% { opacity: 1; translate: 0 0; } }
-#scene-hint { position: fixed; z-index: 1; left: max(22px,env(safe-area-inset-left)); bottom: max(18px,env(safe-area-inset-bottom)); max-width: min(360px,calc(100vw - 44px)); margin: 0; color: #806e5d; font: 400 12px/1.55 'Be Vietnam Pro','PingFang SC','Microsoft YaHei','Noto Sans CJK SC',sans-serif; letter-spacing: .01em; text-shadow: 0 1px 7px #fff9ed; pointer-events: none; }
-#next-round { position: fixed; z-index: 2; left: max(22px,env(safe-area-inset-left)); bottom: max(18px,env(safe-area-inset-bottom)); }
-#another-round { display: flex; align-items: center; gap: 22px; min-height: 44px; padding: 10px 17px; border: 1px solid #d7bda4; border-radius: 24px; background: #fff8e9e8; color: #873c28; font: 500 13px/1.4 'Be Vietnam Pro','PingFang SC','Microsoft YaHei','Noto Sans CJK SC',sans-serif; cursor: pointer; box-shadow: 0 4px 16px #69412812; transition: background .2s, transform .2s; }
-#another-round:hover { background: #fffaf1; transform: translateY(-2px); }
-#another-round:focus-visible { outline: 2px solid #9c442c; outline-offset: 4px; }
-@media (max-width: 600px) {
-  #reaction { top: 22%; }
-  #scene-hint { bottom: max(8vh,env(safe-area-inset-bottom)); }
-  #scene-hint[data-scene="menu"] { top: max(76px,calc(env(safe-area-inset-top) + 64px)); bottom: auto; }
-}
+@keyframes bubble-in { from { opacity: 0; transform: translate(-50%, -100%) scale(.85); } to { opacity: 1; transform: translate(-50%, -100%) scale(1); } }
+@keyframes taste-reaction { 0% { opacity: 0; translate: 0 7px; scale: .9; } 15%, 80% { opacity: 1; translate: 0 0; scale: 1; } 100% { opacity: 0; translate: 0 -4px; scale: 1; } }
 
-/* A quiet language choice stays available without covering the food or menu. */
-#language-switch { position: fixed; z-index: 4; top: max(12px,env(safe-area-inset-top)); right: max(16px,env(safe-area-inset-right)); display: flex; gap: 2px; border-radius: 10px; background: #fff7e899; }
-#language-switch button { position: relative; min-width: 44px; min-height: 44px; padding: 8px; border: 0; border-radius: 8px; background: transparent; color: #75614e; font: 500 12px/1.4 'Be Vietnam Pro','PingFang SC','Microsoft YaHei',sans-serif; cursor: pointer; text-shadow: 0 1px 8px #fff8ed; transition: color .2s, background .2s; }
+/* The hint stays a quiet 12px line; a faint backing keeps it legible over the busy tabletop on phones. */
+#scene-hint { position: fixed; z-index: 1; left: max(22px, env(safe-area-inset-left)); bottom: max(18px, env(safe-area-inset-bottom)); max-width: min(360px, calc(100vw - 44px)); margin: 0; padding: 6px 12px; border-radius: 999px; background: #fff8ec99; color: #7d6858; font: 400 12px/1.55 var(--ui-font); letter-spacing: .01em; pointer-events: none; animation: rise-in .5s var(--ease-out); }
+#scene-hint.is-refreshed { animation: rise-in .4s var(--ease-out); }
+#next-round { position: fixed; z-index: 2; left: max(22px, env(safe-area-inset-left)); bottom: max(18px, env(safe-area-inset-bottom)); animation: rise-in .6s var(--ease-pop); }
+#another-round { display: flex; align-items: center; gap: 22px; min-height: 44px; padding: 10px 17px; border: 1px solid #d7bda4; border-radius: 24px; background: #fff8e9e8; color: #873c28; font: 500 13px/1.4 var(--ui-font); cursor: pointer; box-shadow: 0 4px 16px #69412812; transition: background .2s, transform .25s var(--ease-out), box-shadow .25s; }
+#another-round:hover { background: #fffaf1; transform: translateY(-2px); box-shadow: 0 8px 22px #6941281c; }
+#another-round:active { transform: translateY(0) scale(.98); }
+#another-round:focus-visible { outline: 2px solid #9c442c; outline-offset: 4px; }
+
+/* Corner controls: a sound toggle on the left, the language choice on the right. Both fade a
+   little while the camera travels so the scene owns the frame. */
+#sound-toggle, #language-switch { transition: opacity .6s var(--ease-out); }
+body.is-cinematic #sound-toggle, body.is-cinematic #language-switch { opacity: .4; }
+#sound-toggle { position: fixed; z-index: 4; top: max(12px, env(safe-area-inset-top)); left: max(14px, env(safe-area-inset-left)); display: grid; place-items: center; width: 44px; height: 44px; padding: 0; border: 0; border-radius: 12px; background: #fff7e899; color: #75614e; cursor: pointer; }
+#sound-toggle:hover { color: #903f29; background: #fff7e8b3; }
+#sound-toggle:focus-visible { outline: 2px solid #9c442c; outline-offset: 1px; background: #fff7e8; }
+#sound-toggle .wave, #sound-toggle .mute { transition: opacity .2s, transform .25s var(--ease-out); transform-origin: 13px 12px; }
+#sound-toggle[aria-pressed="false"] .wave { opacity: 0; transform: scale(.6); }
+#sound-toggle[aria-pressed="true"] .mute { opacity: 0; transform: scale(.6); }
+#language-switch { position: fixed; z-index: 4; top: max(12px, env(safe-area-inset-top)); right: max(16px, env(safe-area-inset-right)); display: flex; gap: 2px; border-radius: 10px; background: #fff7e899; }
+#language-switch button { position: relative; min-width: 44px; min-height: 44px; padding: 8px; border: 0; border-radius: 8px; background: transparent; color: #75614e; font: 500 12px/1.4 var(--ui-font); cursor: pointer; text-shadow: 0 1px 8px #fff8ed; transition: color .2s, background .2s; }
 #language-switch button[aria-pressed="true"] { color: #903f29; }
 #language-switch button[aria-pressed="true"]::after { content: ''; position: absolute; bottom: 7px; width: 12px; height: 2px; left: calc(50% - 6px); border-radius: 2px; background: currentColor; }
 #language-switch button:hover { background: #fff7e8b3; color: #903f29; }
 #language-switch button:focus-visible { outline: 2px solid #9c442c; outline-offset: 1px; background: #fff7e8; }
-:lang(zh) #play-button, :lang(zh) #reaction { font-family: 'PingFang SC','Microsoft YaHei','Noto Sans CJK SC',sans-serif; }
+:lang(zh) #play-button, :lang(zh) #reaction { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif; }
+
+/* Phones: the bottom edge is the thumb zone, so the hint and the round button sit centred there;
+   on the menu the hint moves above the board, clear of the dark sauce bowl. */
+@media (max-width: 600px) {
+  #reaction { top: 22%; }
+  #scene-hint { left: 50%; transform: translateX(-50%); bottom: max(8vh, env(safe-area-inset-bottom)); max-width: calc(100vw - 32px); text-align: center; }
+  #scene-hint[data-scene="menu"] { top: max(76px, calc(env(safe-area-inset-top) + 64px)); bottom: auto; }
+  #next-round { left: 50%; transform: translateX(-50%); bottom: max(8vh, env(safe-area-inset-bottom)); }
+  #play-button { gap: 26px; padding: 15px 26px; font-size: 20px; }
+}
+@media (max-height: 520px) and (orientation: landscape) {
+  #title-screen { padding-bottom: max(14px, env(safe-area-inset-bottom)); gap: 8px; }
+  .title-tagline, .title-eyebrow { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
