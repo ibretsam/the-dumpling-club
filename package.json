@@ -1,0 +1,19 @@
+{
+  "name": "the-dumpling-club",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node tools/serve.mjs 8080",
+    "build:model": "node tools/build-dumpling-glb.mjs",
+    "test": "node --test tests/contact.test.mjs",
+    "test:browser": "node tests/browser-contact.mjs",
+    "test:ui": "node tests/browser-ui.mjs",
+    "test:scenes": "node tests/browser-scenes.mjs",
+    "test:i18n": "node tests/browser-i18n.mjs",
+    "test:characters": "node tests/browser-characters.mjs"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
+    "playwright": "^1.58.2"
+  }
+}
